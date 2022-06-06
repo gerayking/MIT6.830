@@ -1,7 +1,15 @@
 package simpledb.execution;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import simpledb.common.Type;
+import simpledb.storage.Field;
+import simpledb.storage.IntField;
 import simpledb.storage.Tuple;
+import simpledb.storage.TupleDesc;
+import simpledb.storage.TupleIterator;
 
 /**
  * Knows how to compute some aggregate over a set of StringFields.
@@ -9,6 +17,12 @@ import simpledb.storage.Tuple;
 public class StringAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
+    private int gbField;
+    private Type gbFieldType;
+    private int aField;
+    private Op aggOp;
+    private TupleDesc tupleDesc;
+    private Map<Field, List<Field>> group;
 
     /**
      * Aggregate constructor
@@ -21,6 +35,21 @@ public class StringAggregator implements Aggregator {
 
     public StringAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
         // some code goes here
+        gbField = gbfield;
+        gbFieldType = gbfieldtype;
+        aField = afield;
+        aggOp = what;
+        group = new HashMap<>();
+        if(gbfield != -1){
+            Type[] types = new Type[2];
+            types[0] = gbfieldtype;
+            types[1] = Type.INT_TYPE;
+            tupleDesc = new TupleDesc(types);
+        }else{
+            Type[] types = new Type[1];
+            types[0] = Type.INT_TYPE;
+            tupleDesc = new TupleDesc(types);
+        }
     }
 
     /**
@@ -29,6 +58,18 @@ public class StringAggregator implements Aggregator {
      */
     public void mergeTupleIntoGroup(Tuple tup) {
         // some code goes here
+        Field field = tup.getField(aField);
+        Field groupField = null;
+        if(gbField != -1){
+            groupField = tup.getField(gbField);
+        }
+        if(group.containsKey(groupField)){
+            group.get(groupField).add(field);
+        }else{
+            ArrayList<Field> fields = new ArrayList<>();
+            fields.add(field);
+            group.put(groupField, fields);
+        }
     }
 
     /**
@@ -41,7 +82,22 @@ public class StringAggregator implements Aggregator {
      */
     public OpIterator iterator() {
         // some code goes here
-        throw new UnsupportedOperationException("please implement me for lab2");
+        ArrayList<Tuple> tuples = new ArrayList<>();
+        switch (aggOp){
+            case COUNT:
+                for (Field field : group.keySet()) {
+                    Tuple tuple = new Tuple(tupleDesc);
+                    tuple.setField(0,field);
+                    if(field != null){
+                        tuple.setField(1,new IntField(group.get(field).size()));
+                    }else{
+                        tuple.setField(0,new IntField(group.get(field).size()));
+                    }
+                    tuples.add(tuple);
+                }
+                break;
+        }
+        return new TupleIterator(tupleDesc,tuples);
     }
 
 }

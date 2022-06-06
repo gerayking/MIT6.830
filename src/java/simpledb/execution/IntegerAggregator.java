@@ -1,7 +1,15 @@
 package simpledb.execution;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import simpledb.common.Type;
+import simpledb.storage.Field;
+import simpledb.storage.IntField;
 import simpledb.storage.Tuple;
+import simpledb.storage.TupleDesc;
+import simpledb.storage.TupleIterator;
 
 /**
  * Knows how to compute some aggregate over a set of IntFields.
@@ -9,13 +17,21 @@ import simpledb.storage.Tuple;
 public class IntegerAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
+    private int gbfield;
+    private Type gbfieldtype;
+    private int afield;
+    private Op aggOp;
+    private Map<Field, List<Field>> group;
+    private TupleDesc tupleDesc;
+
 
     /**
      * Aggregate constructor
      * 
      * @param gbfield
      *            the 0-based index of the group-by field in the tuple, or
-     *            NO_GROUPING if there is no grouping
+     *            NO_GROUPING if t
+     *            here is no grouping
      * @param gbfieldtype
      *            the type of the group by field (e.g., Type.INT_TYPE), or null
      *            if there is no grouping
@@ -27,6 +43,21 @@ public class IntegerAggregator implements Aggregator {
 
     public IntegerAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
         // some code goes here
+        this.gbfield = gbfield;
+        this.gbfieldtype = gbfieldtype;
+        this.afield = afield;
+        this.aggOp = what;
+        group  = new HashMap<>();
+        if(gbfield != -1){
+            Type[] types = new Type[2];
+            types[0] = gbfieldtype;
+            types[1] = Type.INT_TYPE;
+            tupleDesc = new TupleDesc(types);
+        }else{
+            Type[] types = new Type[1];
+            types[0] = Type.INT_TYPE;
+            tupleDesc = new TupleDesc(types);
+        }
     }
 
     /**
@@ -38,6 +69,19 @@ public class IntegerAggregator implements Aggregator {
      */
     public void mergeTupleIntoGroup(Tuple tup) {
         // some code goes here
+        final Field aggField = tup.getField(afield);
+        Field groupField = null;
+        if(gbfield != -1){
+            groupField = tup.getField(gbfield);
+        }
+        if(group.containsKey(groupField)){
+            group.get(groupField).add(aggField);
+        }else{
+            List<Field> list = new ArrayList<>();
+            list.add(aggField);
+            group.put(groupField,list);
+        }
+
     }
 
     /**
@@ -50,8 +94,92 @@ public class IntegerAggregator implements Aggregator {
      */
     public OpIterator iterator() {
         // some code goes here
-        throw new
-        UnsupportedOperationException("please implement me for lab2");
+        ArrayList<Tuple> tuples = new ArrayList<>();
+        switch (aggOp){
+            case AVG:
+                for (Field field : group.keySet()) {
+                    int sum = 0;
+                    final Tuple tuple = new Tuple(tupleDesc);
+                    tuple.setField(0,field);
+                    for(int i=0;i<group.get(field).size();i++){
+                        IntField intField = (IntField)group.get(field).get(i);
+                        sum += intField.getValue();
+                    }
+                    // 若field为null，则
+                    if(field != null){
+                        tuple.setField(1,new IntField(sum/group.get(field).size()));
+                    }else{
+                        tuple.setField(0, new IntField(sum / group.get(field).size()));
+                    }
+                    tuples.add(tuple);
+                }
+                break;
+            case MAX:
+                for (Field field : group.keySet()) {
+                    int max = Integer.MIN_VALUE;
+                    final Tuple tuple = new Tuple(tupleDesc);
+                    tuple.setField(0,field);
+                    for(int i=0;i<group.get(field).size();i++){
+                        IntField intField = (IntField)group.get(field).get(i);
+                        max = Math.max(max,intField.getValue());
+                    }
+                    if(field != null){
+                        tuple.setField(1,new IntField(max));
+                    }else{
+                        tuple.setField(0, new IntField(max));
+                    }
+                    tuples.add(tuple);
+                }
+                break;
+            case COUNT:
+                for (Field field : group.keySet()) {
+                    Tuple tuple = new Tuple(tupleDesc);
+                    tuple.setField(0,field);
+                    if(field != null){
+                        tuple.setField(1,new IntField(group.get(field).size()));
+                    }else{
+                        tuple.setField(0, new IntField(group.get(field).size()));
+                    }
+                    tuples.add(tuple);
+                }
+                break;
+            case SUM:
+                for (Field field : group.keySet()) {
+                    int sum = 0;
+                    final Tuple tuple = new Tuple(tupleDesc);
+                    tuple.setField(0,field);
+                    for(int i=0;i<group.get(field).size();i++){
+                        IntField intField = (IntField)group.get(field).get(i);
+                        sum += intField.getValue();
+                    }
+                    // 若field为null，则
+                    if(field != null){
+                        tuple.setField(1,new IntField(sum));
+                    }else{
+                        tuple.setField(0, new IntField(sum));
+                    }
+                    tuples.add(tuple);
+                }
+                break;
+            case MIN:
+                for (Field field : group.keySet()) {
+                    int min = Integer.MAX_VALUE;
+                    final Tuple tuple = new Tuple(tupleDesc);
+                    tuple.setField(0,field);
+                    for(int i=0;i<group.get(field).size();i++){
+                        IntField intField = (IntField)group.get(field).get(i);
+                        min = Math.min(min,intField.getValue());
+                    }
+                    if(field != null){
+                        tuple.setField(1,new IntField(min));
+                    }else{
+                        tuple.setField(0, new IntField(min));
+                    }
+                    tuples.add(tuple);
+                }
+                break;
+        }
+        return new TupleIterator(tupleDesc,tuples);
     }
 
 }

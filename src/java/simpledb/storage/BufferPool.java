@@ -1,5 +1,11 @@
 package simpledb.storage;
 
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Stack;
 import simpledb.common.Database;
 import simpledb.common.Permissions;
 import simpledb.common.DbException;
@@ -24,6 +30,58 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class BufferPool {
     /** Bytes per page, including header. */
+
+    private int numPages;
+    private FIFOCache<PageId,Page> FIFOCache;
+    class FIFOCache<K,V>{
+        private int size;
+        private int capacity;
+        private Map<K,V>cache = new ConcurrentHashMap<>();
+        private Queue<K> queue = new LinkedList<>();
+        public FIFOCache(int numPages){
+            this.capacity = numPages;
+            this.size = 0;
+        }
+        public int getSize() {
+            return size;
+        }
+
+        public int getCapacity() {
+            return capacity;
+        }
+        public synchronized  void remove(K key){
+            if(cache.containsKey(key) == false)return;
+            Stack<K>  tmp = new Stack<>();
+            while(queue.size() != 0){
+                final K poll = queue.poll();
+                if(poll.equals(key)){
+                    break;
+                }
+                tmp.add(poll);
+            }
+            while (!tmp.isEmpty()){
+                queue.add(tmp.pop());
+            }
+        }
+        public synchronized V get(K key){
+            if(!cache.containsKey(key))return null;
+            return cache.get(key);
+        }
+        public synchronized void put(K key,V value){
+            if(cache.containsKey(key)){
+                return ;
+            }
+            if(size+1>capacity){
+                final K poll = queue.poll();
+                cache.remove(poll);
+                size--;
+            }
+            queue.add(key);
+            cache.put(key,value);
+            size++;
+        }
+    }
+
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
     private static int pageSize = DEFAULT_PAGE_SIZE;
@@ -39,6 +97,8 @@ public class BufferPool {
      * @param numPages maximum number of pages in this buffer pool.
      */
     public BufferPool(int numPages) {
+        FIFOCache = new FIFOCache<>(numPages);
+        this.numPages = numPages;
         // some code goes here
     }
     
@@ -73,8 +133,14 @@ public class BufferPool {
      */
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
-        // some code goes here
-        return null;
+        if(FIFOCache.get(pid)==null){
+            DbFile databaseFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+            Page page = databaseFile.readPage(pid);
+            FIFOCache.put(pid,page);
+            return page;
+        }else{
+            return FIFOCache.get(pid);
+        }
     }
 
     /**
@@ -139,6 +205,12 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
+        DbFile databaseFile = Database.getCatalog().getDatabaseFile(tableId);
+        List<Page> pages = databaseFile.insertTuple(tid, t);
+        for (Page page : pages) {
+            page.markDirty(true,tid);
+            FIFOCache.put(page.getId(),page);
+        }
     }
 
     /**
@@ -158,6 +230,12 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
+        DbFile databaseFile = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
+        List<Page> pages = databaseFile.deleteTuple(tid, t);
+        for (Page page : pages) {
+            page.markDirty(true,tid);
+            FIFOCache.put(page.getId(),page);
+        }
     }
 
     /**
@@ -168,6 +246,9 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
         // not necessary for lab1
+        for (Page page : FIFOCache.cache.values()) {
+            flushPage(page.getId());
+        }
 
     }
 
@@ -182,6 +263,7 @@ public class BufferPool {
     public synchronized void discardPage(PageId pid) {
         // some code goes here
         // not necessary for lab1
+        FIFOCache.remove(pid);
     }
 
     /**
@@ -191,6 +273,10 @@ public class BufferPool {
     private synchronized  void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
+        final Page page = FIFOCache.get(pid);
+        final DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+        dbFile.writePage(page);
+        page.markDirty(false,null);
     }
 
     /** Write all pages of the specified transaction to disk.
