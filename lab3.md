@@ -109,6 +109,7 @@ the basic operation is as follows:
     <tt>LogicalPlan</tt> instance it has constructed.  The <tt>physicalPlan</tt> method returns a
     <tt>DBIterator</tt> object that can be used to actually run the query.
     
+
 In the exercises to come, you will implement the methods that help
 <tt>physicalPlan</tt> devise an optimal plan.
 
@@ -164,7 +165,7 @@ joincost(t1 join t2) = scancost(t1) + ntups(t1) x scancost(t2) //IO cost
                        + ntups(t1) x ntups(t2)  //CPU cost
 ```
 
-Here, `ntups(t1)` is the number of tuples in table t1.
+Here, `ntups(t1)` is the numberof tuples in table t1.
 
 ####  2.2.3 Filter Selectivity
 
@@ -302,7 +303,7 @@ While implementing your simple solution, you  should keep in mind the following:
 
 <!--  
   * <a name="change">The following three paragraphs are different in this version of the lab. </a> *
-  .-->
+    .-->
 *  For equality joins, when one of the attributes is a primary key, the number of tuples produced by the join cannot
    be larger than the cardinality of the non-primary key attribute.
 * For equality joins when there is no primary key, it's hard to say much about what the size of the output
@@ -320,31 +321,7 @@ While implementing your simple solution, you  should keep in mind the following:
 
 
 ***
-**Exercise 3:  Join Cost Estimation**
-
-
-The class <tt>JoinOptimizer.java</tt> includes all of the methods
-for ordering and computing costs of joins.  In this exercise, you
-will write the methods for estimating the selectivity and cost of
-a join, specifically:
-
-*  Implement <tt>
-   estimateJoinCost(LogicalJoinNode j, int card1, int card2, double
-   cost1, double cost2)</tt>:  This method estimates the cost of
-   join j, given that the left input is of cardinality card1, the
-   right input of cardinality card2, that the cost to scan the left
-   input is cost1, and that the cost to access the right input is
-   card2.  You can assume the join is an NL join, and apply
-   the formula mentioned earlier.
-*  Implement <tt>estimateJoinCardinality(LogicalJoinNode j, int
-   card1, int card2, boolean t1pkey, boolean t2pkey)</tt>: This
-   method estimates the number of tuples output by join j, given that
-   the left input is size card1, the right input is size card2, and
-   the flags t1pkey and t2pkey that indicate whether the left and
-   right (respectively) field is unique (a primary key).
-
-After implementing these methods, you should be able to pass the unit
-tests <tt>estimateJoinCostTest</tt> and <tt>estimateJoinCardinality</tt> in <tt>JoinOptimizerTest.java</tt>.
+​	
 ***
 
 

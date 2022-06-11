@@ -3,6 +3,7 @@ package simpledb.optimizer;
 import simpledb.common.Database;
 import simpledb.ParsingException;
 import simpledb.execution.*;
+import simpledb.execution.Predicate.Op;
 import simpledb.storage.TupleDesc;
 
 import java.util.*;
@@ -130,7 +131,7 @@ public class JoinOptimizer {
             // HINT: You may need to use the variable "j" if you implemented
             // a join algorithm that's more complicated than a basic
             // nested-loops join.
-            return -1.0;
+            return cost1 + card1*cost2 + card1*card2;
         }
     }
 
@@ -176,6 +177,26 @@ public class JoinOptimizer {
                                                    Map<String, Integer> tableAliasToId) {
         int card = 1;
         // some code goes here
+        switch (joinOp){
+            case EQUALS:
+                if(!t1pkey&&t2pkey){
+                    card = card2;
+                }else if(t1pkey&&!t2pkey){
+                    card = card1;
+                }else if(!t1pkey&&!t2pkey){
+                    card = Math.max(card1,card2);
+                }else if(t1pkey&&t2pkey){
+                    card = Math.min(card1,card2);
+                }
+                break;
+            case NOT_EQUALS:
+                card = card1*card2 -
+                    estimateTableJoinCardinality(Op.EQUALS,table1Alias,table2Alias,
+                        field1PureName,field2PureName,card1,card2,t1pkey,t2pkey,stats,tableAliasToId);
+                break;
+            default:
+                card = (int)(0.3*card1*card2);
+        }
         return card <= 0 ? 1 : card;
     }
 
@@ -235,10 +256,33 @@ public class JoinOptimizer {
             Map<String, TableStats> stats,
             Map<String, Double> filterSelectivities, boolean explain)
             throws ParsingException {
-
         // some code goes here
+        CostCard bestCostCard = new CostCard();//最佳的方案
+        PlanCache planCache = new PlanCache();// 存储方案的缓冲区
+        int size = joins.size();
+        for(int i=1;i<=size;i++){
+             Set<Set<LogicalJoinNode>> enumerateSubsets = enumerateSubsets(joins, i);// 获取大小为i的子集枚举
+            for (Set<LogicalJoinNode> set : enumerateSubsets) {
+                double bestCostScore = Double.MAX_VALUE;
+                bestCostCard = new CostCard();
+                for (LogicalJoinNode logicalJoinNode : set) {
+                    CostCard costCard =
+                        computeCostAndCardOfSubplan(stats, filterSelectivities, logicalJoinNode,
+                            set, bestCostScore, planCache);
+                    if(costCard == null)continue;
+                    if(bestCostScore>costCard.cost){
+                        bestCostScore = costCard.cost;
+                        bestCostCard = costCard;
+                    }
+                }
+                if(bestCostScore != Double.MAX_VALUE){
+                    planCache.addPlan(set,bestCostScore,bestCostCard.card,bestCostCard.plan);
+                }
+            }
+        }
+        if(explain)printJoins(bestCostCard.plan,planCache,stats,filterSelectivities);
+        return bestCostCard.plan;
         //Replace the following
-        return joins;
     }
 
     // ===================== Private Methods =================================
