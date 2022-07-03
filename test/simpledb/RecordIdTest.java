@@ -26,7 +26,6 @@ public class RecordIdTest extends SimpleDbTestBase {
         hrid2 = new RecordId(hpid2, 3);
         hrid3 = new RecordId(hpid, 4);
         hrid4 = new RecordId(hpid3, 3);
-
     }
 
     /**

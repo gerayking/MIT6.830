@@ -5,11 +5,13 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Random;
 import java.util.Stack;
 import simpledb.common.Database;
 import simpledb.common.Permissions;
 import simpledb.common.DbException;
 import simpledb.common.DeadlockException;
+import simpledb.transaction.LockManager;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
@@ -81,6 +83,7 @@ public class BufferPool {
             size++;
         }
     }
+    private LockManager lockManager;
 
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
@@ -99,6 +102,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
         FIFOCache = new FIFOCache<>(numPages);
         this.numPages = numPages;
+        lockManager = new LockManager();
         // some code goes here
     }
     
@@ -133,6 +137,16 @@ public class BufferPool {
      */
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
+        boolean lockAcquired = false;
+        long start = System.currentTimeMillis();
+        long timeout = new Random().nextInt(2000);
+        while(!lockAcquired){
+            long now = System.currentTimeMillis();
+            if(now-start>timeout){
+                throw new TransactionAbortedException();
+            }
+            lockAcquired = lockManager.acquireLock(tid, pid, perm);
+        }
         if(FIFOCache.get(pid)==null){
             DbFile databaseFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page page = databaseFile.readPage(pid);
@@ -155,6 +169,7 @@ public class BufferPool {
     public  void unsafeReleasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
+        lockManager.releaseLock(tid,pid);
     }
 
     /**
@@ -165,13 +180,14 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) {
         // some code goes here
         // not necessary for lab1|lab2
+        lockManager.releaseAllLock(tid);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
     public boolean holdsLock(TransactionId tid, PageId p) {
         // some code goes here
         // not necessary for lab1|lab2
-        return false;
+        return lockManager.holdsLock(tid,p);
     }
 
     /**

@@ -355,12 +355,12 @@ generation algorithm and a lazy iterator (or stream) interface to avoid material
 
 Second, we have provided the method:
 ```java
-    private CostCard computeCostAndCardOfSubplan(Map<String, TableStats> stats, 
-                                                Map<String, Double> filterSelectivities, 
-                                                LogicalJoinNode joinToRemove,  
-                                                Set<LogicalJoinNode> joinSet,
-                                                double bestCostSoFar,
-                                                PlanCache pc) 
+private CostCard computeCostAndCardOfSubplan(Map<String, TableStats> stats, 
+                                             Map<String, Double> filterSelectivities, 
+                                             LogicalJoinNode joinToRemove,  
+                                             Set<LogicalJoinNode> joinSet,
+                                             double bestCostSoFar,
+                                             PlanCache pc) 
 ```
 
 Given a subset of joins (<tt>joinSet</tt>), and a join to remove from
@@ -419,7 +419,6 @@ allows you to find the selectivity of any predicates over a table;
 it is guaranteed to have one entry per table name in the
 <tt>FROM</tt> list.  Finally, <tt>explain</tt> specifies that you
 should output a representation of the join order for informational purposes.
-
 
 You may wish to use the helper methods and classes described above to assist
 in your implementation. Roughly, your implementation should follow
