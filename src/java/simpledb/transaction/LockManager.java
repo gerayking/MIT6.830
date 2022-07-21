@@ -24,7 +24,6 @@ public class LockManager {
             }
             locks.add(pageLock);
             pageLocks.put(pageId,locks);
-            System.out.println(threadName+": the "+pageId+"have no lock, tranction "+ tid+"require lock");
             return true;
         }
         if(locks.size()==1){

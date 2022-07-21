@@ -4,8 +4,10 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Random;
+import java.util.Set;
 import java.util.Stack;
 import simpledb.common.Database;
 import simpledb.common.Permissions;
@@ -18,6 +20,7 @@ import simpledb.transaction.TransactionId;
 import java.io.*;
 
 import java.util.concurrent.ConcurrentHashMap;
+import sun.misc.LRUCache;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -44,15 +47,18 @@ public class BufferPool {
             this.capacity = numPages;
             this.size = 0;
         }
+        public Set<K> keySet(){
+            return cache.keySet();
+        }
         public int getSize() {
             return size;
         }
-
         public int getCapacity() {
             return capacity;
         }
         public synchronized  void remove(K key){
-            if(cache.containsKey(key) == false)return;
+            if(!cache.containsKey(key))return;
+            cache.remove(key);
             Stack<K>  tmp = new Stack<>();
             while(queue.size() != 0){
                 final K poll = queue.poll();
@@ -64,6 +70,7 @@ public class BufferPool {
             while (!tmp.isEmpty()){
                 queue.add(tmp.pop());
             }
+            size--;
         }
         public synchronized V get(K key){
             if(!cache.containsKey(key))return null;
@@ -76,7 +83,6 @@ public class BufferPool {
             if(size+1>capacity){
                 final K poll = queue.poll();
                 cache.remove(poll);
-                size--;
             }
             queue.add(key);
             cache.put(key,value);
@@ -150,6 +156,9 @@ public class BufferPool {
         if(FIFOCache.get(pid)==null){
             DbFile databaseFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page page = databaseFile.readPage(pid);
+            if(FIFOCache.getSize()>=numPages){
+                evictPage();
+            }
             FIFOCache.put(pid,page);
             return page;
         }else{
@@ -180,7 +189,7 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) {
         // some code goes here
         // not necessary for lab1|lab2
-        lockManager.releaseAllLock(tid);
+        transactionComplete(tid,true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
@@ -200,6 +209,40 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid, boolean commit) {
         // some code goes here
         // not necessary for lab1|lab2
+        if(commit){
+            try {
+                flushPages(tid);
+            }catch (IOException e){
+                final Set<PageId> pageIds = FIFOCache.keySet();
+                for (PageId pageId : pageIds) {
+                    final Page page = FIFOCache.get(pageId);
+                    if(lockManager.holdsLock(tid,pageId)&&page.isDirty()!=null){
+                        final DbFile dbFile =
+                            Database.getCatalog().getDatabaseFile(pageId.getTableId());
+                        final Page page1 = dbFile.readPage(pageId);
+                        FIFOCache.put(pageId,page1);
+                    }
+                }
+                e.printStackTrace();
+            }
+        }else {
+            //roll back
+            final Set<PageId> pageIds = FIFOCache.keySet();
+            for (PageId pageId : pageIds) {
+                final Page page = FIFOCache.get(pageId);
+                if(lockManager.holdsLock(tid,pageId)&&page.isDirty()!=null){
+                    FIFOCache.remove(pageId);
+                    try {
+                        final Page newPage =
+                            Database.getBufferPool().getPage(tid, pageId, Permissions.READ_ONLY);
+                        FIFOCache.put(pageId,newPage);
+                    }catch (Exception e){
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+        lockManager.releaseAllLock(tid);
     }
 
     /**
@@ -300,6 +343,12 @@ public class BufferPool {
     public synchronized  void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        final Set<PageId> pageIds = FIFOCache.keySet();
+        for (PageId pageId : pageIds) {
+            if(lockManager.holdsLock(tid,pageId)){
+                flushPage(pageId);
+            }
+        }
     }
 
     /**
@@ -309,6 +358,21 @@ public class BufferPool {
     private synchronized  void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
+        boolean flag = false;
+        final Set<PageId> pageIds = FIFOCache.keySet();
+        for (PageId pageId : pageIds) {
+            final Page page = FIFOCache.get(pageId);
+            if (page.isDirty()!=null){
+                continue;
+            }else{
+                FIFOCache.remove(pageId);
+                flag=true;
+                break;
+            }
+        }
+        if(!flag){
+            throw new DbException("all are dirty pages");
+        }
     }
 
 }

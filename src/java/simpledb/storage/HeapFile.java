@@ -203,6 +203,7 @@ public class HeapFile implements DbFile {
             dirtyPages.add(page);
             return dirtyPages;
         }
+        // 如果没有空的槽了
         BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(file, true));
         byte[] emptyPageData = HeapPage.createEmptyPageData();
         bufferedOutputStream.write(emptyPageData);
