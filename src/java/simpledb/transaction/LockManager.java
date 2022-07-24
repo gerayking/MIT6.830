@@ -50,7 +50,8 @@ public class LockManager {
             return false;
         }
         for (PageLock lock : locks) {
-            if(lock.getTransactionId().equals(tid)){
+            final TransactionId ttid = lock.getTransactionId();
+            if(ttid!=null&&ttid.equals(tid)){
                 return true;
             }
         }
@@ -60,7 +61,8 @@ public class LockManager {
     public synchronized void releaseLock(TransactionId tid,PageId pageId){
         final List<PageLock> pageLocks = this.pageLocks.get(pageId);
         for (PageLock lock : pageLocks) {
-            if(lock.getTransactionId().equals(tid)){
+            final TransactionId ttid = lock.getTransactionId();
+            if(ttid!=null&&ttid.equals(tid)){
                 pageLocks.remove(lock);
                 if(pageLocks.isEmpty()){
                     this.pageLocks.remove(pageId);
@@ -73,7 +75,7 @@ public class LockManager {
         for (PageId pid : pageLocks.keySet()) {
             final List<PageLock> locks = this.pageLocks.get(pid);
             for (PageLock lock : locks) {
-                if(lock.getTransactionId().equals(transactionId)){
+                if(transactionId.equals(lock.getTransactionId())){
                     locks.remove(lock);
                     if(locks.isEmpty()){
                         pageLocks.remove(pid);
@@ -85,8 +87,10 @@ public class LockManager {
     }
     public synchronized boolean holdsLock(TransactionId tid,PageId pid){
         final List<PageLock> locks = this.pageLocks.get(pid);
+        if(locks==null)return false;
         for (PageLock lock : locks) {
-            if(lock.getTransactionId().equals(tid))return true;
+            final TransactionId ttid = lock.getTransactionId();
+            if(ttid!=null&&ttid.equals(tid))return true;
         }
         return false;
     }

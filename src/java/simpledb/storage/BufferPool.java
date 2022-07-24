@@ -199,6 +199,7 @@ public class BufferPool {
         return lockManager.holdsLock(tid,p);
     }
 
+
     /**
      * Commit or abort a given transaction; release all locks associated to
      * the transaction.
@@ -210,20 +211,20 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1|lab2
         if(commit){
-            try {
-                flushPages(tid);
-            }catch (IOException e){
-                final Set<PageId> pageIds = FIFOCache.keySet();
-                for (PageId pageId : pageIds) {
-                    final Page page = FIFOCache.get(pageId);
-                    if(lockManager.holdsLock(tid,pageId)&&page.isDirty()!=null){
-                        final DbFile dbFile =
-                            Database.getCatalog().getDatabaseFile(pageId.getTableId());
-                        final Page page1 = dbFile.readPage(pageId);
-                        FIFOCache.put(pageId,page1);
+            for (PageId pageId : FIFOCache.keySet()) {
+                final Page value = FIFOCache.get(pageId);
+                if (value != null && value.isDirty() != null && value.isDirty().equals(tid)) {
+                    DbFile databaseFile = Database.getCatalog().getDatabaseFile(value.getId().getTableId());
+                    try {
+                        Database.getLogFile().logWrite(value.isDirty(), value.getBeforeImage(), value);
+                        Database.getLogFile().force();
+                        value.markDirty(false, null);
+                        databaseFile.writePage(value);
+                        value.setBeforeImage();
+                    } catch (IOException e) {
+                        e.printStackTrace();
                     }
                 }
-                e.printStackTrace();
             }
         }else {
             //roll back
@@ -305,8 +306,21 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
         // not necessary for lab1
-        for (Page page : FIFOCache.cache.values()) {
-            flushPage(page.getId());
+        for (Page value : FIFOCache.cache.values()) {
+            if(value != null && value.isDirty()!=null){
+                DbFile databaseFile = Database.getCatalog().getDatabaseFile(value.getId().getTableId());
+                try {
+                    Database.getLogFile().logWrite(value.isDirty(), value.getBeforeImage(), value);
+                    Database.getLogFile().force();
+                    //这里不能将脏页标记为不脏，如果这样做则当事务提交的时候，flushpage2函数找不到脏页，无法将更新写入磁盘
+                    //也无法setbeforeimage 详情见LogTest的78行
+                    // value.markDirty(false, null);
+                    databaseFile.writePage(value);
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
 
     }
@@ -334,7 +348,16 @@ public class BufferPool {
         // not necessary for lab1
         final Page page = FIFOCache.get(pid);
         final DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
-        dbFile.writePage(page);
+        try{
+            if(page.isDirty()!=null){
+                Database.getLogFile().logWrite(page.isDirty(),page.getBeforeImage(),page);
+                Database.getLogFile().force();
+                page.markDirty(false,null);
+                dbFile.writePage(page);
+            }
+        }catch (IOException e){
+            e.printStackTrace();
+        }
         page.markDirty(false,null);
     }
 

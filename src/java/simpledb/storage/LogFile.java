@@ -460,6 +460,34 @@ public class LogFile {
             synchronized(this) {
                 preAppend();
                 // some code goes here
+                final long tidId = tid.getId();
+                Long begin = tidToFirstLogRecord.get(tidId);
+                raf.seek(begin);
+                while (true) {
+                    try {
+                        int type = raf.readInt();
+                        long curTid = raf.readLong();
+                        if (curTid != tidId) {
+                            if(type == 3){
+                                readPageData(raf);
+                                readPageData(raf);
+                            }
+                        } else {
+                            if (type == 3) {
+                                Page before = readPageData(raf);
+                                Page after = readPageData(raf);
+                                DbFile databaseFile = Database.getCatalog().getDatabaseFile(before.getId().getTableId());
+                                databaseFile.writePage(before);
+                                Database.getBufferPool().discardPage(after.getId());
+                                raf.seek(raf.getFilePointer() + 8);
+                                break;
+                            }
+                        }
+                        raf.seek(raf.getFilePointer() + 8);
+                    } catch (EOFException e) {
+                        break;
+                    }
+                }
             }
         }
     }
@@ -487,6 +515,62 @@ public class LogFile {
             synchronized (this) {
                 recoveryUndecided = false;
                 // some code goes here
+                raf = new RandomAccessFile(logFile,"rw");
+                Set<Long>commitedId = new HashSet<>();
+                Map<Long,List<Page>>beforePages = new HashMap<>();
+                Map<Long,List<Page>>afterPages = new HashMap<>();
+                Long checkpoint = raf.readLong();
+                while(true){
+                    try{
+                        final int type = raf.readInt();
+                        final long txid = raf.readLong();
+                        switch (type){
+                            case UPDATE_RECORD:
+                                final Page beforeImage = readPageData(raf);
+                                final Page afterImage = readPageData(raf);
+                                final List<Page> l1 =
+                                    beforePages.getOrDefault(txid, new ArrayList<>());
+                                l1.add(beforeImage);
+                                beforePages.put(txid,l1);
+                                final List<Page> l2 =
+                                    afterPages.getOrDefault(txid, new ArrayList<>());
+                                l2.add(afterImage);
+                                afterPages.put(txid,l1);
+                                break;
+                            case COMMIT_RECORD:
+                                commitedId.add(txid);
+                                break;
+                            case CHECKPOINT_RECORD:
+                                int numTxs = raf.read();
+                                while(numTxs-- >0){
+                                    raf.readLong();
+                                    raf.readLong();
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                        raf.readLong();
+                    }catch (Exception e){
+                        break;
+                    }
+                }
+                for (Long txid : beforePages.keySet()) {
+                    if(!commitedId.contains(txid)){
+                        final List<Page> pages = beforePages.get(txid);
+                        for (Page p : pages) {
+                            Database.getCatalog().getDatabaseFile(p.getId().getTableId()).writePage(p);
+                        }
+                    }
+                }
+                for (Long txid : commitedId) {
+                    if(afterPages.containsKey(txid)){
+                        final List<Page> pages = afterPages.get(txid);
+                        for (Page p : pages) {
+                            Database.getCatalog().getDatabaseFile(p.getId().getTableId()).writePage(p);
+                        }
+                    }
+                }
             }
          }
     }

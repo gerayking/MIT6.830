@@ -285,7 +285,7 @@ public class BTreeFile implements DbFile {
 		// 把当前元素插入父节点
 		BTreeInternalPage parent =
 			getParentWithEmptySlots(tid, dirtypages, page.getParentId(), field);
-		Field mid = reverseIt.next().getField(page.keyField);
+		Field mid = reverseIt.next().getField(keyField);
 		BTreeEntry bTreeEntry = new BTreeEntry(mid, page.pid, newPage.pid);
 		parent.insertEntry(bTreeEntry);
 		dirtypages.put(parent.pid,parent);
